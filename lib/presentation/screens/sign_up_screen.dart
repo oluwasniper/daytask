@@ -7,7 +7,21 @@ final textFieldColor = Color(0xff8CAAB9);
 final formFieldColor = Color(0xff455A64);
 const space = SizedBox(height: 20);
 
-bool? _acceptedTerms = false;
+import 'package:flutter/material.dart';
+// … other imports …
+
+class SignUpScreen extends StatefulWidget {
+  @override
+  _SignUpScreenState createState() => _SignUpScreenState();
+}
+
+class _SignUpScreenState extends State<SignUpScreen> {
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  bool _acceptedTerms = false;
+
+  // … rest of the sign-up form implementation …
+}
 
 @RoutePage()
 class SignUpScreen extends StatefulWidget {
