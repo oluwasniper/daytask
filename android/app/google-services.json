@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "1084072414990",
+    "project_id": "daytask-a2744",
+    "storage_bucket": "daytask-a2744.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1084072414990:android:81628b0676490f7805d15f",
+        "android_client_info": {
+          "package_name": "com.example.daytask"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1084072414990-lggadh3n0uomvqr0u0fb2bqor61ebfge.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB0Jd0U19YVlClC5dYwa9Xq8DiPr4Q9Jgs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1084072414990-lggadh3n0uomvqr0u0fb2bqor61ebfge.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1084072414990-9f7d6jstnp3petou3k6vfbrik8l17s02.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.daytask"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
