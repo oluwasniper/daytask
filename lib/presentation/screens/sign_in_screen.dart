@@ -44,7 +44,9 @@ class _SignInScreenState extends State<SignInScreen> {
       messenger.showSnackBar(
         SnackBar(content: Text('Signed in as ${credential.user?.email ?? ''}')),
       );
-      // TODO: Navigate to home or next screen here
+      // Navigate to home or next screen here
+      if (!mounted) return;
+      context.router.replace(HomeRoute());
     } on FirebaseAuthException catch (e) {
       String message = 'Sign in failed';
       if (e.code == 'user-not-found') {

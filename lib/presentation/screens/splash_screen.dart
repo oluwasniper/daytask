@@ -102,10 +102,10 @@ class SplashScreen extends StatelessWidget {
                   ),
                 ],
               ),
-              SizedBox(height: 30),
+              SizedBox(height: 20),
               SizedBox(
                 width: double.infinity, // set your desired width
-                height: 70, // set your desired height
+                height: 60, // set your desired height
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Color(0xffFED36A),
