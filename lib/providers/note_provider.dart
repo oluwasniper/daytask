@@ -3,99 +3,108 @@ import 'package:daytask/services/api_service.dart';
 import 'package:flutter/material.dart';
 
 class NoteProvider with ChangeNotifier {
-  List<Note> _notes = [];
+  // The complete, unfiltered list of all notes fetched from the API
+  List<Note> _allNotes = [];
+  // The list currently displayed to the UI after applying filters (search, archive)
   List<Note> _filteredNotes = [];
+
   bool _isLoading = false;
   String? _error;
   String _searchQuery = '';
-  bool _showArchivedOnly = false;
+  bool _showArchivedOnly = false; // False means show active notes
 
-  // Getters
-  List<Note> get notes => _filteredNotes;
-  List<Note> get allNotes => _notes;
+  // Getters for external access
+  List<Note> get notes => _filteredNotes; // UI consumes this
   bool get isLoading => _isLoading;
   String? get error => _error;
   String get searchQuery => _searchQuery;
   bool get showArchivedOnly => _showArchivedOnly;
 
-  // Get active (non-archived) notes
+  // Get active (non-archived) notes from the full list
   List<Note> get activeNotes =>
-      _notes.where((note) => !note.isArchived).toList();
+      _allNotes.where((note) => !note.isArchived).toList();
 
-  // Get archived notes
+  // Get archived notes from the full list
   List<Note> get archivedNotes =>
-      _notes.where((note) => note.isArchived).toList();
+      _allNotes.where((note) => note.isArchived).toList();
 
-  // Get notes count
-  int get totalNotesCount => _notes.length;
+  // Get notes count from the full list
+  int get totalNotesCount => _allNotes.length;
   int get activeNotesCount => activeNotes.length;
   int get archivedNotesCount => archivedNotes.length;
 
+  /// Internal helper to set loading state and notify.
   void _setLoading(bool loading) {
-    _isLoading = loading;
-    notifyListeners();
+    if (_isLoading != loading) {
+      // Only update and notify if status changed
+      _isLoading = loading;
+      notifyListeners();
+    }
   }
 
+  /// Internal helper to set error message and notify.
   void _setError(String? error) {
-    _error = error;
-    notifyListeners();
+    if (_error != error) {
+      // Only update and notify if error message changed
+      _error = error;
+      notifyListeners();
+    }
   }
 
-  void _setNotes(List<Note> notes) {
-    _notes = notes;
-    _applyFilters();
-    notifyListeners();
-  }
-
-  // Apply search and archive filters
+  /// Applies search and archive filters to `_allNotes` and updates `_filteredNotes`.
+  /// This method does NOT call notifyListeners(), as it's a helper for other methods
+  /// that will call notifyListeners() once all state changes are complete.
   void _applyFilters() {
-    List<Note> filtered = _notes;
+    List<Note> tempFiltered = List.from(
+      _allNotes,
+    ); // Start with a copy of all notes
 
-    // Filter by archive status
+    // 1. Filter by archive status
     if (_showArchivedOnly) {
-      filtered = filtered.where((note) => note.isArchived).toList();
+      tempFiltered = tempFiltered.where((note) => note.isArchived).toList();
     } else {
-      filtered = filtered.where((note) => !note.isArchived).toList();
+      tempFiltered = tempFiltered.where((note) => !note.isArchived).toList();
     }
 
-    // Apply search filter
+    // 2. Apply search filter
     if (_searchQuery.isNotEmpty) {
-      filtered = filtered.where((note) {
-        return note.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            note.content.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-            note.tags.any(
-              (tag) => tag.toLowerCase().contains(_searchQuery.toLowerCase()),
-            );
+      tempFiltered = tempFiltered.where((note) {
+        final query = _searchQuery.toLowerCase();
+        return note.title.toLowerCase().contains(query) ||
+            note.content.toLowerCase().contains(query) ||
+            note.tags.any((tag) => tag.toLowerCase().contains(query));
       }).toList();
     }
 
-    // Sort by updatedAt (most recent first)
-    filtered.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    // 3. Sort by updatedAt (most recent first)
+    tempFiltered.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
 
-    _filteredNotes = filtered;
+    _filteredNotes = tempFiltered;
   }
 
-  // Fetch all notes from API
+  /// Fetches all notes from the API.
   Future<void> fetchNotes() async {
-    _setLoading(true);
-    _setError(null);
+    if (_isLoading) return; // Prevent concurrent fetches
+    _setLoading(true); // Will notify listeners
+    _setError(null); // Will notify listeners
 
     try {
       final response = await ApiService.getAllNotes();
       final List<dynamic> notesData = response as List<dynamic>;
 
-      final notes = notesData
-          .map((noteData) => Note.fromJson(noteData))
-          .toList();
-      _setNotes(notes);
+      _allNotes = notesData.map((noteData) => Note.fromJson(noteData)).toList();
+      _applyFilters(); // Update _filteredNotes based on new _allNotes and current filters
+      notifyListeners(); // Notify UI that notes and filters are updated
     } catch (e) {
-      _setError('Failed to fetch notes: ${e.toString()}');
+      _setError(
+        'Failed to fetch notes: ${e.toString()}',
+      ); // Will notify listeners
+    } finally {
+      _setLoading(false); // Will notify listeners
     }
-
-    _setLoading(false);
   }
 
-  // Create a new note
+  /// Creates a new note via API.
   Future<bool> createNote(
     String title,
     String content, {
@@ -108,21 +117,20 @@ class NoteProvider with ChangeNotifier {
       final response = await ApiService.createNote(title, content);
       final newNote = Note.fromJson(response);
 
-      // Add to local list and refresh filters
-      _notes.insert(0, newNote);
-      _applyFilters();
-      notifyListeners();
+      _allNotes.insert(0, newNote); // Add to the full list
+      _applyFilters(); // Re-apply filters including the new note
+      notifyListeners(); // Notify UI after all updates
 
-      _setLoading(false);
       return true;
     } catch (e) {
       _setError('Failed to create note: ${e.toString()}');
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
-  // Update an existing note
+  /// Updates an existing note via API.
   Future<bool> updateNote(
     String noteId,
     String title,
@@ -136,24 +144,23 @@ class NoteProvider with ChangeNotifier {
       final response = await ApiService.updateNote(noteId, title, content);
       final updatedNote = Note.fromJson(response);
 
-      // Update local list
-      final index = _notes.indexWhere((note) => note.id == noteId);
+      final index = _allNotes.indexWhere((note) => note.id == noteId);
       if (index != -1) {
-        _notes[index] = updatedNote;
-        _applyFilters();
-        notifyListeners();
+        _allNotes[index] = updatedNote; // Update in the full list
+        _applyFilters(); // Re-apply filters
+        notifyListeners(); // Notify UI after all updates
       }
 
-      _setLoading(false);
       return true;
     } catch (e) {
       _setError('Failed to update note: ${e.toString()}');
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
-  // Delete a note
+  /// Deletes a note via API.
   Future<bool> deleteNote(String noteId) async {
     _setLoading(true);
     _setError(null);
@@ -161,21 +168,22 @@ class NoteProvider with ChangeNotifier {
     try {
       await ApiService.deleteNote(noteId);
 
-      // Remove from local list
-      _notes.removeWhere((note) => note.id == noteId);
-      _applyFilters();
-      notifyListeners();
+      _allNotes.removeWhere(
+        (note) => note.id == noteId,
+      ); // Remove from the full list
+      _applyFilters(); // Re-apply filters
+      notifyListeners(); // Notify UI after all updates
 
-      _setLoading(false);
       return true;
     } catch (e) {
       _setError('Failed to delete note: ${e.toString()}');
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
-  // Archive/Unarchive a note
+  /// Toggles the archive status of a note via API.
   Future<bool> toggleArchiveNote(String noteId) async {
     _setLoading(true);
     _setError(null);
@@ -184,99 +192,70 @@ class NoteProvider with ChangeNotifier {
       final response = await ApiService.archiveNote(noteId);
       final updatedNote = Note.fromJson(response);
 
-      // Update local list
-      final index = _notes.indexWhere((note) => note.id == noteId);
+      final index = _allNotes.indexWhere((note) => note.id == noteId);
       if (index != -1) {
-        _notes[index] = updatedNote;
-        _applyFilters();
-        notifyListeners();
+        _allNotes[index] = updatedNote; // Update in the full list
+        _applyFilters(); // Re-apply filters (which will hide/show based on archive filter)
+        notifyListeners(); // Notify UI after all updates
       }
 
-      _setLoading(false);
       return true;
     } catch (e) {
       _setError('Failed to archive note: ${e.toString()}');
-      _setLoading(false);
       return false;
+    } finally {
+      _setLoading(false);
     }
   }
 
-  // Search notes
-  Future<void> searchNotes(String query) async {
-    if (query.trim().isEmpty) {
-      // If query is empty, just filter locally
-      _searchQuery = '';
-      _applyFilters();
-      notifyListeners();
-      return;
-    }
-
-    _setLoading(true);
-    _setError(null);
-
-    try {
-      // Use API search for more comprehensive results
-      final response = await ApiService.searchNote(query);
-      final List<dynamic> notesData = response as List<dynamic>;
-
-      final searchResults = notesData
-          .map((noteData) => Note.fromJson(noteData))
-          .toList();
-
-      // Update search query and show results
-      _searchQuery = query;
-      _notes = searchResults;
-      _applyFilters();
-    } catch (e) {
-      // Fallback to local search if API search fails
-      _searchQuery = query;
-      _applyFilters();
-      _setError('Search failed, showing local results');
-    }
-
-    _setLoading(false);
-  }
-
-  // Set local search query (for local filtering)
+  /// Sets the search query and re-applies filters locally.
+  /// Does NOT trigger API search. For API search, call `fetchNotes()` again
+  /// or implement a separate API search method if your backend supports it efficiently.
   void setSearchQuery(String query) {
-    _searchQuery = query;
+    if (_searchQuery == query.trim()) return; // No change, no need to update
+
+    _searchQuery = query.trim();
     _applyFilters();
-    notifyListeners();
+    notifyListeners(); // Notify UI of filter change
   }
 
-  // Clear search
+  /// Clears the current search query.
   void clearSearch() {
+    if (_searchQuery.isEmpty) return; // Already empty
+
     _searchQuery = '';
     _applyFilters();
-    notifyListeners();
+    notifyListeners(); // Notify UI of filter change
   }
 
-  // Toggle between showing active and archived notes
+  /// Toggles between showing active and archived notes.
   void toggleShowArchived() {
     _showArchivedOnly = !_showArchivedOnly;
     _applyFilters();
-    notifyListeners();
+    notifyListeners(); // Notify UI of filter change
   }
 
-  // Set archive filter
+  /// Explicitly sets whether to show archived notes.
   void setShowArchived(bool showArchived) {
+    if (_showArchivedOnly == showArchived) return; // No change
+
     _showArchivedOnly = showArchived;
     _applyFilters();
-    notifyListeners();
+    notifyListeners(); // Notify UI of filter change
   }
 
-  // Get a specific note by ID
+  /// Gets a specific note by ID from the complete list.
   Note? getNoteById(String noteId) {
     try {
-      return _notes.firstWhere((note) => note.id == noteId);
+      return _allNotes.firstWhere((note) => note.id == noteId);
     } catch (e) {
       return null;
     }
   }
 
-  // Get notes by tag
+  /// Gets notes by a specific tag from the complete list.
   List<Note> getNotesByTag(String tag) {
-    return _notes
+    return _allNotes
         .where(
           (note) => note.tags.any(
             (noteTag) => noteTag.toLowerCase() == tag.toLowerCase(),
@@ -285,59 +264,67 @@ class NoteProvider with ChangeNotifier {
         .toList();
   }
 
-  // Get all unique tags
+  /// Gets all unique tags from the complete list.
   List<String> getAllTags() {
     final Set<String> allTags = {};
-    for (final note in _notes) {
+    for (final note in _allNotes) {
       allTags.addAll(note.tags);
     }
     return allTags.toList()..sort();
   }
 
-  // Filter notes by date range
+  /// Filters notes by date range from the complete list.
   List<Note> getNotesInDateRange(DateTime startDate, DateTime endDate) {
-    return _notes.where((note) {
-      return note.createdAt.isAfter(startDate) &&
-          note.createdAt.isBefore(endDate);
+    return _allNotes.where((note) {
+      // Use isAfter and isBefore for strict range, or isAtSameMomentAs for inclusive
+      return note.createdAt.isAfter(
+            startDate.subtract(const Duration(microseconds: 1)),
+          ) && // Ensure start is inclusive
+          note.createdAt.isBefore(
+            endDate.add(const Duration(microseconds: 1)),
+          ); // Ensure end is inclusive
     }).toList();
   }
 
-  // Get recent notes (last 7 days)
+  /// Gets recent notes (last 7 days) from the complete list.
   List<Note> getRecentNotes() {
     final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
     return getNotesInDateRange(sevenDaysAgo, DateTime.now());
   }
 
-  // Clear error
+  /// Clears any current error message.
   void clearError() {
-    _setError(null);
+    _setError(null); // Will notify listeners
   }
 
-  // Refresh notes (pull to refresh)
+  /// Refreshes notes by re-fetching from the API.
   Future<void> refreshNotes() async {
-    await fetchNotes();
+    await fetchNotes(); // Re-fetches, re-filters, and notifies
   }
 
-  // Add a note locally (for optimistic updates)
+  // --- Optimistic Update Helpers ---
+  // These modify _allNotes directly, then trigger _applyFilters and notify.
+
+  /// Adds a note locally, useful for optimistic UI updates.
   void addNoteLocally(Note note) {
-    _notes.insert(0, note);
+    _allNotes.insert(0, note);
     _applyFilters();
     notifyListeners();
   }
 
-  // Update a note locally (for optimistic updates)
+  /// Updates a note locally, useful for optimistic UI updates.
   void updateNoteLocally(Note updatedNote) {
-    final index = _notes.indexWhere((note) => note.id == updatedNote.id);
+    final index = _allNotes.indexWhere((note) => note.id == updatedNote.id);
     if (index != -1) {
-      _notes[index] = updatedNote;
+      _allNotes[index] = updatedNote;
       _applyFilters();
       notifyListeners();
     }
   }
 
-  // Remove a note locally (for optimistic updates)
+  /// Removes a note locally, useful for optimistic UI updates.
   void removeNoteLocally(String noteId) {
-    _notes.removeWhere((note) => note.id == noteId);
+    _allNotes.removeWhere((note) => note.id == noteId);
     _applyFilters();
     notifyListeners();
   }

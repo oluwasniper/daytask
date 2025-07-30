@@ -1,14 +1,14 @@
-import 'package:auto_route/auto_route.dart';
-import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
-import 'package:daytask/constants.dart';
-import 'package:daytask/providers/auth_provider.dart';
-import 'package:daytask/providers/note_provider.dart';
-import 'package:daytask/models/note.dart';
-import 'package:daytask/core/routes/app_router.gr.dart'; // Import your generated auto_route file
+import 'package:auto_route/auto_route.dart'; //routing
+import 'package:flutter/material.dart'; //flutter
+import 'package:google_fonts/google_fonts.dart'; //Font styling
+import 'package:provider/provider.dart'; //state management
+import 'package:daytask/constants.dart'; //constant values
+import 'package:daytask/providers/auth_provider.dart'; // Authentication provider from backend
+import 'package:daytask/providers/note_provider.dart'; // Note provider for managing notes
+import 'package:daytask/models/note.dart'; // Note model
+import 'package:daytask/core/routes/app_router.gr.dart'; // generated auto_route file
 
-@RoutePage()
+@RoutePage() // This is used by my router to identify this screen
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -17,24 +17,55 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  int currentIndex = 0;
-  final TextEditingController _searchController = TextEditingController();
+  int currentIndex =
+      0; //This is for keeping track of the current tab in the bottom navigation bar
+  final TextEditingController _searchController =
+      TextEditingController(); //Text Controller for my search bar
+  bool _isInitialized = false; // Add this to prevent double initialization
 
   @override
   void initState() {
-    super.initState();
-    _loadInitialData();
+    super
+        .initState(); //init state is called when the widget is inserted into the widget tree
+    // Only call _loadInitialData once, after the first frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_isInitialized && mounted) {
+        _loadInitialData();
+        _isInitialized = true;
+      }
+    });
+    // REMOVED: _loadInitialData(); // This duplicate call was causing the error
   }
 
   Future<void> _loadInitialData() async {
-    final noteProvider = Provider.of<NoteProvider>(context, listen: false);
-    await noteProvider.fetchNotes();
+    if (!mounted) return; // Check if widget is still mounted
+
+    try {
+      final noteProvider = Provider.of<NoteProvider>(
+        context,
+        listen: false,
+      ); //note provider to access notes
+      await noteProvider
+          .fetchNotes(); // where i call the fetchNotes function from the note provider to get the initial notes
+    } catch (e) {
+      // Handle any errors gracefully
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to load notes: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   @override
   void dispose() {
-    _searchController.dispose();
-    super.dispose();
+    //This is used to clean up the controller when the widget is disposed
+    _searchController.dispose(); // dispose the search controller
+    super
+        .dispose(); //This is when the widget is to be removed to free resources
   }
 
   @override
@@ -44,11 +75,13 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
+            // This is used to refresh the notes when the user pulls down
             final noteProvider = Provider.of<NoteProvider>(
               context,
               listen: false,
             );
-            await noteProvider.refreshNotes();
+            await noteProvider
+                .refreshNotes(); // Refresh the notes from the provider
           },
           child: SingleChildScrollView(
             padding: padding,
@@ -74,12 +107,11 @@ class _HomeScreenState extends State<HomeScreen> {
         type: BottomNavigationBarType.fixed,
         currentIndex: currentIndex,
         onTap: (index) {
-          // Always update the currentIndex to reflect the selected tab visually
           setState(() {
             currentIndex = index;
           });
 
-          // Handle navigation based on the tapped index
+          // This is used to Handle navigation based on the tapped index
           switch (index) {
             case 0: // Home
               // If already on Home, no explicit action needed.
@@ -218,7 +250,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             titleController.text.trim(),
                             contentController.text.trim(),
                           );
-                          if (success) {
+                          if (success && mounted) {
                             Navigator.pop(context);
                             ScaffoldMessenger.of(context).showSnackBar(
                               const SnackBar(
@@ -723,7 +755,7 @@ class NoteCard extends StatelessWidget {
             onPressed: () async {
               Navigator.pop(context);
               final success = await noteProvider.deleteNote(note.id);
-              if (success) {
+              if (success && context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
                     content: Text('Note deleted successfully'),
